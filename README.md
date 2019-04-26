@@ -15,7 +15,8 @@ $ conda activate mne
 ```
 
 Or on **WINDOWS**:  
-Download environment.yml from https://raw.githubusercontent.com/mne-tools/mne-python/master/environment.yml to folder.
+Download environment.yml from https://raw.githubusercontent.com/mne-tools/mne-python/master/environment.yml to folder.  
+Then via command line:
 ```
 conda env create -f environment.yml
 activate mne
