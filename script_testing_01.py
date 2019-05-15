@@ -26,7 +26,7 @@ warnings.filterwarnings('ignore')
 for filename in cnt_files[4:5]:
     # Import data and events
     file = PATH_DATA + filename
-    data_raw = mne.io.read_raw_cnt(file, montage=None, eog='header', preload=True)
+    data_raw = mne.io.read_raw_cnt(file, montage=None, eog='auto', preload=True)
     
     # Band-pass filter (between 1 and 40 Hz. Was 0.5 to 30Hz at Stober 2016)
     data_raw.filter(1, 40, fir_design='firwin')
@@ -81,14 +81,16 @@ plt.title('Channels: 1-5')
 plt.legend(data_raw.ch_names[30:32])
 
 
-#%%   
-for filename in cnt_files[0:12]:
+#%% Display epochs (averaged) for a number of patients  
+for filename in cnt_files[0:6]:
     # Import data and events
     file = PATH_DATA + filename
     data_raw = mne.io.read_raw_cnt(file, montage=None, eog='auto', preload=True)
     
     # Band-pass filter (between 1 and 40 Hz. Was 0.5 to 30Hz at Stober 2016)
-    data_raw.filter(1, 30, fir_design='firwin')
+    #data_raw.filter(0.5, None, fir_design='firwin') #high-pass filter
+    #data_raw.filter(0.5, 30, fir_design='firwin')  # Band-pass filter
+    data_raw.filter(0.1, 30, fir_design='firwin')  # Band-pass filter
     
     events = mne.find_events(data_raw, shortest_event=0, stim_channel='STI 014', verbose=False)
     
@@ -112,11 +114,22 @@ for filename in cnt_files[0:12]:
     evoked.plot_topomap(times=np.array([0, 0.050, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]), time_unit='s')
     evoked.plot();
 
+
 #%% SHOW EVENTS
 event_id = list(set(events[:,2])) #[3, 13, 66]
 epochs = mne.Epochs(data_raw, events, event_id, tmin, tmax, proj=True, picks=picks,
                     baseline=baseline, preload=True, verbose=False)
 mne.viz.plot_events(events, data_raw.info['sfreq'], data_raw.first_samp, event_id=epochs.event_id)
+
+
+#%% SHOW EPOCHS (e.g. for only one type of stimuli)
+#events_select = mne.pick_events(events, include=[13])
+#mne.viz.plot_events(events_select)
+epochs['66'].plot(events=events_select)
+
+# The plot is interactive, so work with it selec, zoom etc. 
+# Then save if wanted with:
+# plt.savefig('test.pdf')
 
 
 #%% SHOW SIGNALS AND STIMULI
@@ -149,7 +162,7 @@ data_raw.set_annotations(annot)
 print(data_raw.annotations)  # to get information about what annotations we have
 data_raw.plot(events=eog_events)  # To see the annotated segments.
 
-#%%
+#%% EOG artefact correction 2
 reject = dict(eog=150e-5)
 
 events = mne.find_events(data_raw, shortest_event=0, stim_channel='STI 014', verbose=False)
@@ -162,6 +175,72 @@ picks_meg = mne.pick_types(data_raw.info, meg=False, eeg=True, eog=True,
 epochs = mne.Epochs(data_raw, events, event_id, tmin, tmax, proj=True,
                     picks=picks_meg, baseline=baseline, reject=reject,
                     reject_by_annotation=True)
+
+#%% EOG artefact correction --- TRY OWN SOLUTION:
+heog_dist = data[30,:]
+fig = plt.subplots(figsize=(10,8))
+plt.hist(heog_dist)
+
+
+
+
+#%% ICA artifact correction (from mne)
+from mne.preprocessing import ICA
+
+#Import data
+data_raw = mne.io.read_raw_cnt(file, montage=None, eog='auto', preload=True)
+    
+# Band-pass filter: 
+data_raw.filter(1, 40, fir_design='firwin')
+
+suspects, suspects_names = helper_functions.select_bad_channels(data_raw, 60, threshold=5)
+data_raw.info['bads'] = suspects_names
+
+#method = 'fastica'
+method = 'extended-infomax'
+
+# Choose other parameters
+n_components = 25  # if float, select n_components by explained variance of PCA
+decim = 3  # we need sufficient statistics, not all time points -> saves time
+
+# we will also set state of the random number generator - ICA is a
+# non-deterministic algorithm, but we want to have the same decomposition
+# and the same order of components each time this tutorial is run
+random_state = 23
+
+ica = ICA(n_components=n_components, method=method, random_state=random_state)
+print(ica)
+
+picks_meg = mne.pick_types(data_raw.info, meg=False, eeg=True, eog=False,
+                           stim=False, exclude='bads')
+
+#projs, data_raw.info['projs'] = data_raw.info['projs'], []
+ica.fit(data_raw, picks=picks_meg, decim=decim)
+#data_raw.info['projs'] = projs
+print(ica)
+
+
+#%%
+from mne.preprocessing import create_eog_epochs, create_ecg_epochs
+
+eog_average = create_eog_epochs(data_raw, picks=picks_meg).average()
+
+eog_epochs = create_eog_epochs(data_raw)  # get single EOG trials
+eog_inds, scores = ica.find_bads_eog(eog_epochs)  # find via correlation
+
+ica.plot_scores(scores, exclude=eog_inds)  # look at r scores of components
+# we can see that only one component is highly correlated and that this
+# component got detected by our correlation analysis (red).
+
+ica.plot_sources(eog_average, exclude=eog_inds)  # look at source time course
+
+
+#%%
+ica.apply(data_raw)
+data_raw.plot()  # check the result
+
+
+
 #%%
 evoked = epochs['66'].average()
 evoked.plot(spatial_colors=True);
