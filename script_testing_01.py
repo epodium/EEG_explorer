@@ -188,6 +188,7 @@ plt.hist(heog_dist)
 from mne.preprocessing import ICA
 
 #Import data
+file = PATH_DATA + cnt_files[2]
 data_raw = mne.io.read_raw_cnt(file, montage=None, eog='auto', preload=True)
     
 # Band-pass filter: 
@@ -196,8 +197,8 @@ data_raw.filter(1, 40, fir_design='firwin')
 suspects, suspects_names = helper_functions.select_bad_channels(data_raw, 60, threshold=5)
 data_raw.info['bads'] = suspects_names
 
-#method = 'fastica'
-method = 'extended-infomax'
+method = 'fastica'
+#method = 'extended-infomax'
 
 # Choose other parameters
 n_components = 25  # if float, select n_components by explained variance of PCA
@@ -239,6 +240,11 @@ ica.plot_sources(eog_average, exclude=eog_inds)  # look at source time course
 ica.apply(data_raw)
 data_raw.plot()  # check the result
 
+#%%
+event_id = list(set(events[:,2])) #[3, 13, 66]
+epochs = mne.Epochs(data_raw, events, event_id, tmin, tmax, proj=True, picks=picks,
+                    baseline=baseline, preload=True, verbose=False)
+epochs['66'].plot(events=events_select)
 
 
 #%%
