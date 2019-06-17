@@ -43,28 +43,29 @@ def select_bad_channels(data_raw, time = 100, threshold = 5, include_for_mean = 
 
 
 
-def select_bad_episodes(epochs, stimuli, threshold = 5, max_bad_episodes = 10):
+def select_bad_epochs(epochs, stimuli, threshold = 5, max_bad_fraction = 0.2):
     """
-    Function to find suspect episodes and channels --> still might need manual inspection!
+    Function to find suspect epochs and channels --> still might need manual inspection!
     
     Args:
     --------
     epochs: epochs object (mne)
     
     stimuli: int/str
-        Stimuli to pick episodes for.         
+        Stimuli to pick epochs for.         
     threshold: float/int
         Relative threshold. Anything channel with variance > threshold*mean OR < threshold*mean
         will be considered suspect. Default = 5.   
-    max_bad_episodes: int
-        Maximum number of bad episodes. If number is higher for one channel, call it a 'bad' channel
+    max_bad_fraction: float
+        Maximum fraction of bad epochs. If number is higher for one channel, call it a 'bad' channel
     """
-    bad_episodes = set()
+    bad_epochs = set()
     bad_channels = []
     
     from collections import Counter
     
     signals = epochs[str(stimuli)].get_data()
+    max_bad_epochs = max_bad_fraction*signals.shape[0]
     
     # Find outliers in episode STD and max-min difference:
     signals_std = np.std(signals, axis=2)
@@ -73,21 +74,23 @@ def select_bad_episodes(epochs, stimuli, threshold = 5, max_bad_episodes = 10):
     outliers = np.where((signals_std > threshold*np.mean(signals_std)) | (signals_minmax > threshold*np.mean(signals_minmax)))
     
     if len(outliers[0]) > 0:
-        print("Found", len(set(outliers[0])), "bad episodes in a total of", len(set(outliers[1])), " channels.")
+        print("Found", len(set(outliers[0])), "bad epochs in a total of", len(set(outliers[1])), " channels.")
         occurences = [(Counter(outliers[1])[x], x) for x in list(Counter(outliers[1]))]
         for occur, channel in occurences:
-            if occur > max_bad_episodes:
-                print("Found bad channel (more than", max_bad_episodes, " bad episodes): Channel no: ", channel )
+            if occur > max_bad_epochs:
+                print("Found bad channel (more than", max_bad_epochs, " bad epochs): Channel no: ", channel )
                 bad_channels.append(channel)
             else:
-                # only add bad episodes for non-bad channels
-                bad_episodes = bad_episodes|set(outliers[0][outliers[1] == channel])
+                # only add bad epochs for non-bad channels
+                bad_epochs = bad_epochs|set(outliers[0][outliers[1] == channel])
+                
+        print("Marked", len(bad_epochs), "bad epochs in a total of", signals.shape[0], " epochs.")
         
 #        # Remove bad data:
 #        signals = np.delete(signals, bad_channels, 1)
-#        signals = np.delete(signals, list(bad_episodes), 0)
+#        signals = np.delete(signals, list(bad_epochs), 0)
         
     else:
         print("No outliers found with given threshold.")
     
-    return [epochs.ch_names[x] for x in bad_channels], list(bad_episodes)
+    return [epochs.ch_names[x] for x in bad_channels], list(bad_epochs)
