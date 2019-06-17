@@ -71,7 +71,9 @@ def select_bad_epochs(epochs, stimuli, threshold = 5, max_bad_fraction = 0.2):
     signals_std = np.std(signals, axis=2)
     signals_minmax = np.amax(signals, axis=2) - np.amin(signals, axis=2)
     
-    outliers = np.where((signals_std > threshold*np.mean(signals_std)) | (signals_minmax > threshold*np.mean(signals_minmax)))
+    outliers_high = np.where((signals_std > threshold*np.mean(signals_std)) | (signals_minmax > threshold*np.mean(signals_minmax)))
+    outliers_low = np.where((signals_std < 1/threshold*np.mean(signals_std)) | (signals_minmax < 1/threshold*np.mean(signals_minmax)))
+    outliers = (np.concatenate((outliers_high[0], outliers_low[0])), np.concatenate((outliers_high[1], outliers_low[1])) ) 
     
     if len(outliers[0]) > 0:
         print("Found", len(set(outliers[0])), "bad epochs in a total of", len(set(outliers[1])), " channels.")
