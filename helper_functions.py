@@ -43,14 +43,16 @@ def select_bad_channels(data_raw, time = 100, threshold = 5, include_for_mean = 
 
 
 
-def select_bad_episodes(signals, threshold = 5, max_bad_episodes = 10):
+def select_bad_episodes(epochs, stimuli, threshold = 5, max_bad_episodes = 10):
     """
     Function to find suspect episodes and channels --> still might need manual inspection!
     
     Args:
     --------
-    signals: epochs.get_data() array (numpy array of episodes)
-        
+    epochs: epochs object (mne)
+    
+    stimuli: int/str
+        Stimuli to pick episodes for.         
     threshold: float/int
         Relative threshold. Anything channel with variance > threshold*mean OR < threshold*mean
         will be considered suspect. Default = 5.   
@@ -61,6 +63,8 @@ def select_bad_episodes(signals, threshold = 5, max_bad_episodes = 10):
     bad_channels = []
     
     from collections import Counter
+    
+    signals = epochs[str(stimuli)].get_data()
     
     # Find outliers in episode STD and max-min difference:
     signals_std = np.std(signals, axis=2)
@@ -79,11 +83,11 @@ def select_bad_episodes(signals, threshold = 5, max_bad_episodes = 10):
                 # only add bad episodes for non-bad channels
                 bad_episodes = bad_episodes|set(outliers[0][outliers[1] == channel])
         
-        # Remove bad data:
-        signals = np.delete(signals, bad_channels, 1)
-        signals = np.delete(signals, list(bad_episodes), 0)
+#        # Remove bad data:
+#        signals = np.delete(signals, bad_channels, 1)
+#        signals = np.delete(signals, list(bad_episodes), 0)
         
     else:
         print("No outliers found with given threshold.")
     
-    return signals, bad_channels, list(bad_episodes)
+    return [epochs.ch_names[x] for x in bad_channels], list(bad_episodes)
